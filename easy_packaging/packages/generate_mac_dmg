@@ -1,0 +1,76 @@
+#!/bin/sh
+
+# macos打包脚本。编译生成.app并打包成dmg格式
+# 使用方式:直接运行脚本
+
+# 生成的文件名的前缀。默认会读取.app的名称作为前缀，你可以按照需求自己修改
+fileNamePrefix=""
+# 设置.app的名称。此为flutter build后生成的.app文件名。如果不设置，默认去/build/macos/Build/Products/Release目录下找。一般不需设置。
+appName=""
+
+
+# # 编译macos release版本
+cd "$( dirname "$0"  )"
+cd ../
+# 先清除build文件夹的缓存，避免影响打包
+flutter clean
+# 直接build，会生成一个.app包
+flutter build macos --release
+
+#从pubspec.yaml文件获取版本号
+set -e
+file=$(cat pubspec.yaml)
+fullVersion=$(echo | grep -i -e "version: " pubspec.yaml)
+buildName=$(echo $fullVersion | cut -d " " -f 2 | cut -d "+" -f 1)
+buildNumber=$(echo $fullVersion | cut -d "+" -f 2 )
+echo "$fullVersion BUILD_NAME ${buildName} BUILD_NUMBER ${buildNumber}"
+version=$buildName
+
+cd "$( dirname "$0"  )"
+
+# 从build的Release文件夹中获取.app文件的名称
+cd "../build/macos/Build/Products/Release"
+appPath=$(find . -type d -name "*.app")
+echo  "appPath=${appPath}"
+internalAppName=$(basename $appPath .app)
+echo  "internalAppName=${internalAppName}"
+
+# 如果前面没有设置appName，则使用读取到的名称
+if [[ ${appName}x == ""x ]]; then
+  appName=$internalAppName
+fi
+
+# 如果前面没有设置fileNamePrefix，则使用appName的值
+if [ ${fileNamePrefix}x == ""x ] ; then 
+  fileNamePrefix=$appName
+fi
+
+# 最后生成的文件名
+fileName="${fileNamePrefix}_macos_${buildName}_${buildNumber}.dmg"
+
+cd "$( dirname "$0"  )"
+# 判断目录是否存在
+if [ ! -d "./products" ]; then
+    # 如果目录不存在，则创建目录
+    mkdir -p "./products"
+    echo "目录不存在，已创建目录"
+else
+    echo "目录已存在"
+fi
+cd ./products
+
+test -f "$fileName" && rm "$fileName"
+# 从.app生成.dmg
+create-dmg \
+  --volname "${appName}安装器" \
+  --background "../installer_background.png" \
+  --window-pos 200 120 \
+  --window-size 800 450 \
+  --icon-size 100 \
+  --icon "${appName}.app" 240 190 \
+  --hide-extension "${appName}.app" \
+  --app-drop-link 550 190 \
+  "./$fileName" \
+  "../../build/macos/Build/Products/Release"
+
+open ./
